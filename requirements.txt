@@ -5,3 +5,4 @@ nltk
 scikit-learn
 networkx
 pytest
+opencv-python

@@ -1,4 +1,6 @@
 *.xml
+.idea/
+*.html
 /data
 checkpoint
 out
