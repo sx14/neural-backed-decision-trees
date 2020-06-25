@@ -159,7 +159,7 @@ checkpoint_path = './checkpoint/{}.pth'.format(checkpoint_fname)
 print(f'==> Checkpoints will be saved to: {checkpoint_path}')
 
 
-# TODO(alvin): fix checkpoint structure so that this isn't neededd
+# TODO(alvin): fix checkpoint structure so that this isn't needed
 def load_state_dict(state_dict):
     try:
         net.load_state_dict(state_dict)

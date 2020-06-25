@@ -13,6 +13,6 @@ for i in "CIFAR10 ${MODEL_NAME}_cifar10 1"; do
 
   # 3. evaluate with soft then hard inference
   for analysis in SoftEmbeddedDecisionRules HardEmbeddedDecisionRules; do
-    python main.py --dataset=${dataset} --model=${model} --hierarchy=induced-${model} --loss=SoftTreeSupLoss --eval --resume --analysis=${analysis} --tree-supervision-weight=${weight}
+    python main.py --dataset=${dataset} --arch=${model} --hierarchy=induced-${model} --loss=SoftTreeSupLoss --eval --resume --analysis=${analysis} --tree-supervision-weight=${weight}
   done
 done;
