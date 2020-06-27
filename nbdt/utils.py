@@ -18,7 +18,7 @@ import io
 import nltk
 
 # tree-generation consntants
-METHODS = ('wordnet', 'random', 'induced')
+METHODS = ('wordnet', 'random', 'induced', 'induced2')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'Imagenet1000',
     'Cityscapes', 'PascalContext', 'LookIntoPerson', 'ADE20K')
 DATASET_TO_NUM_CLASSES = {
@@ -164,6 +164,8 @@ except Exception as e:
 TOTAL_BAR_LENGTH = 65.
 last_time = time.time()
 begin_time = last_time
+
+
 def progress_bar(current, total, msg=None):
     global last_time, begin_time
     if current == 0:

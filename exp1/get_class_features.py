@@ -39,7 +39,7 @@ datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
-parser.add_argument('--batch-size', default=4, type=int,
+parser.add_argument('--batch-size', default=100, type=int,
                     help='Batch size used for training')
 parser.add_argument('--epochs', '-e', default=200, type=int,
                     help='By default, lr schedule is scaled accordingly')
@@ -149,30 +149,22 @@ if args.pretrained:
 else:
     net = model(**model_kwargs)
 
-net = net.to(device)
-# if device == 'cuda':
-#     net = torch.nn.DataParallel(net)
-#     cudnn.benchmark = True
+    checkpoint_fname = generate_fname(**vars(args))
+    checkpoint_path = './checkpoint/{}.pth'.format(checkpoint_fname)
+    print(f'==> Checkpoints will be saved to: {checkpoint_path}')
 
-checkpoint_fname = generate_fname(**vars(args))
-checkpoint_path = './checkpoint/{}.pth'.format(checkpoint_fname)
-print(f'==> Checkpoints will be saved to: {checkpoint_path}')
-
-
-# TODO(alvin): fix checkpoint structure so that this isn't needed
-def load_state_dict(state_dict):
-    try:
-        net.load_state_dict(state_dict)
-    except RuntimeError as e:
-        if 'Missing key(s) in state_dict:' in str(e):
-            net.load_state_dict({
-                key.replace('module.', '', 1): value
-                for key, value in state_dict.items()
-            })
+    # TODO(alvin): fix checkpoint structure so that this isn't needed
+    def load_state_dict(state_dict):
+        try:
+            net.load_state_dict(state_dict)
+        except RuntimeError as e:
+            if 'Missing key(s) in state_dict:' in str(e):
+                net.load_state_dict({
+                    key.replace('module.', '', 1): value
+                    for key, value in state_dict.items()})
 
 
-resume_path = args.path_resume or checkpoint_path
-if args.resume:
+    resume_path = args.path_resume or checkpoint_path
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
@@ -186,10 +178,16 @@ if args.resume:
             best_acc = checkpoint['acc']
             start_epoch = checkpoint['epoch']
             Colors.cyan(f'==> Checkpoint found for epoch {start_epoch} with accuracy '
-                  f'{best_acc} at {resume_path}')
+                        f'{best_acc} at {resume_path}')
         else:
             load_state_dict(checkpoint)
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
+
+net = net.to(device)
+# if device == 'cuda':
+#     net = torch.nn.DataParallel(net)
+#     cudnn.benchmark = True
+
 
 
 criterion = nn.CrossEntropyLoss()
@@ -200,53 +198,17 @@ loss_kwargs = generate_kwargs(args, class_criterion,
     globals=globals())
 criterion = class_criterion(**loss_kwargs)
 
-optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
-def adjust_learning_rate(epoch, lr):
-    if args.lr_decay_every:
-        steps = epoch // args.lr_decay_every
-        return lr / (10 ** steps)
-    if epoch <= 150 / 350. * args.epochs:  # 32k iterations
-        return lr
-    elif epoch <= 250 / 350. * args.epochs:  # 48k iterations
-        return lr/10
-    else:
-        return lr/100
-
-# Training
-def train(epoch, analyzer):
-    analyzer.start_train(epoch)
-    lr = adjust_learning_rate(epoch, args.lr)
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
-
-    print('\nEpoch: %d' % epoch)
-    net.train()
-    train_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-
-        train_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        stat = analyzer.update_batch(outputs, targets)
-        extra = f'| {stat}' if stat else ''
-
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total, extra))
-
-    analyzer.end_train(epoch)
-
-def test(epoch, analyzer, checkpoint=True):
+def get_class_features(epoch, analyzer):
     analyzer.start_test(epoch)
+
+    feature_len = 640
+    if 'wrn28_10' not in args.arch:
+        print('[sunx] Unsupported arch for feature extraction.')
+        exit(0)
+
+    class_features = np.zeros((len(trainset.classes), feature_len))
+    class_counter = np.zeros(len(trainset.classes))
 
     global best_acc
     net.eval()
@@ -254,43 +216,50 @@ def test(epoch, analyzer, checkpoint=True):
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
+        for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            features = net.features(inputs)
+            features = features.view(features.size(0), -1)
+            outputs = net.output(features)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
+            hits = predicted.eq(targets)
+            correct += hits.sum().item()
 
             if device == 'cuda':
-                predicted = predicted.cpu()
+                outputs = outputs.cpu()
                 targets = targets.cpu()
+                features = features.cpu()
+                hits = hits.cpu()
+
+            features = features.numpy()
+            for i in range(targets.shape[0]):
+                if hits[i].item() == 1:
+                    cid = targets[i].item()
+                    fea = features[i]
+                    class_features[cid] = class_features[cid] + fea
+                    class_counter[cid] = class_counter[cid] + 1
 
             stat = analyzer.update_batch(outputs, targets)
             extra = f'| {stat}' if stat else ''
 
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
+            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total, extra))
 
-    # Save checkpoint.
-    acc = 100.*correct/total
-    print("Accuracy: {}, {}/{}".format(acc, correct, total))
-    if acc > best_acc and checkpoint:
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-
-        print(f'Saving to {checkpoint_fname} ({acc})..')
-        torch.save(state, f'./checkpoint/{checkpoint_fname}.pth')
-        best_acc = acc
-
     analyzer.end_test(epoch)
+
+    # print(class_counter.sum())
+    for i in range(class_counter.shape[0]):
+        class_features[i] = class_features[i] / class_counter[i]
+
+    save_path = os.path.join('nbdt', 'hierarchies', args.dataset, 'class_features.bin')
+    with open(save_path, 'wb') as f:
+        import pickle
+        pickle.dump(class_features, f)
+    print('Class features are saved at %s' % save_path)
 
 
 class_analysis = getattr(analysis, args.analysis or 'Noop')
@@ -301,23 +270,11 @@ analyzer_kwargs = generate_kwargs(args, class_analysis,
 analyzer = class_analysis(**analyzer_kwargs)
 
 
-if args.eval:
-    if not args.resume and not args.pretrained:
-        Colors.red(' * Warning: Model is not loaded from checkpoint. '
-        'Use --resume or --pretrained (if supported)')
+if not args.pretrained:
+    Colors.red(' * Warning: Model is loaded from checkpoint. ')
+else:
+    Colors.red(' * Warning: Model is loaded with pre-trained weights. ')
 
-    analyzer.start_epoch(0)
-    test(0, analyzer, checkpoint=False)
-    exit()
-
-for epoch in range(start_epoch, args.epochs):
-    analyzer.start_epoch(epoch)
-    train(epoch, analyzer)
-    test(epoch, analyzer)
-    analyzer.end_epoch(epoch)
-
-if args.epochs == 0:
-    analyzer.start_epoch(0)
-    test(0, analyzer)
-    analyzer.end_epoch(0)
-print(f'Best accuracy: {best_acc} // Checkpoint name: {checkpoint_fname}')
+analyzer.start_epoch(0)
+get_class_features(0, analyzer)
+exit()

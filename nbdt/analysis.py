@@ -68,8 +68,8 @@ class ConfusionMatrix(Noop):
         super().update_batch(outputs, targets)
         _, predicted = outputs.max(1)
         if len(predicted.shape) == 1:
-            predicted = predicted.numpy().ravel()
-            targets = targets.numpy().ravel()
+            predicted = predicted.cpu().numpy().ravel()
+            targets = targets.cpu().numpy().ravel()
             ConfusionMatrix.update(self.m, predicted, targets)
 
     def end_test(self, epoch):

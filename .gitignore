@@ -1,4 +1,6 @@
 *.xml
+*.bin
+*.json
 .idea/
 *.html
 /data

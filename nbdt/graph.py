@@ -110,7 +110,7 @@ def generate_fname(method, seed=0, branching_factor=2, extra=0,
     if method == 'random':
         if seed != 0:
             fname += f'-seed{seed}'
-    if method == 'induced':
+    if method == 'induced' or method == 'induced2':
         assert checkpoint or arch, \
             'Induced hierarchy needs either `arch` or `checkpoint`'
         if induced_linkage != 'ward' and induced_linkage is not None:
@@ -429,6 +429,51 @@ def build_induced_graph(wnids, checkpoint, model=None, linkage='ward',
         f' {dataset} features {num_classes} classes. Try passing the '
         '`--dataset` with the right number of classes.'
     )
+
+    G = nx.DiGraph()
+
+    # add leaves
+    for wnid in wnids:
+        G.add_node(wnid)
+        set_node_label(G, wnid_to_synset(wnid))
+
+    # add rest of tree
+    clustering = AgglomerativeClustering(
+        linkage=linkage,
+        n_clusters=branching_factor,
+        affinity=affinity,
+    ).fit(centers)
+    children = clustering.children_
+    index_to_wnid = {}
+
+    for index, pair in enumerate(map(tuple, children)):
+        child_wnids = []
+        child_synsets = []
+        for child in pair:
+            if child < num_classes:
+                child_wnid = wnids[child]
+            else:
+                child_wnid = index_to_wnid[child - num_classes]
+            child_wnids.append(child_wnid)
+            child_synsets.append(wnid_to_synset(child_wnid))
+
+        parent = get_wordnet_meaning(G, child_synsets)
+        parent_wnid = synset_to_wnid(parent)
+        G.add_node(parent_wnid)
+        set_node_label(G, parent)
+        index_to_wnid[index] = parent_wnid
+
+        for child_wnid in child_wnids:
+            G.add_edge(parent_wnid, child_wnid)
+
+    assert len(list(get_roots(G))) == 1, list(get_roots(G))
+    return G
+
+
+def build_induced_graph2(wnids, features, linkage='ward',
+        affinity='euclidean', branching_factor=2):
+    num_classes = len(wnids)
+    centers = torch.from_numpy(features)
 
     G = nx.DiGraph()
 
