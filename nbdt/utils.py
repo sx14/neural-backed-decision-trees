@@ -18,7 +18,7 @@ import io
 import nltk
 
 # tree-generation consntants
-METHODS = ('wordnet', 'random', 'induced', 'induced2')
+METHODS = ('wordnet', 'random', 'induced', 'induced2', 'induced3')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'Imagenet1000',
     'Cityscapes', 'PascalContext', 'LookIntoPerson', 'ADE20K')
 DATASET_TO_NUM_CLASSES = {

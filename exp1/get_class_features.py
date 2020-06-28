@@ -26,6 +26,7 @@ import torchvision
 import torchvision.transforms as transforms
 
 import os
+import pickle
 import argparse
 import numpy as np
 
@@ -199,7 +200,40 @@ loss_kwargs = generate_kwargs(args, class_criterion,
 criterion = class_criterion(**loss_kwargs)
 
 
+def get_word2vecs(classes):
+    obj2vec_path = os.path.join('nbdt', 'hierarchies', args.dataset, 'class_vectors.bin')
+    if os.path.exists(obj2vec_path):
+        with open(obj2vec_path, 'rb') as f:
+            obj2vecs = pickle.load(f)
+        return obj2vecs
+
+    import gensim
+    obj2vecs = np.zeros((len(classes), 300))
+    w2v_path = os.path.join('exp1', 'GoogleNews-vectors-negative300.bin')
+    model = gensim.models.KeyedVectors.load_word2vec_format(w2v_path, binary=True)
+    print('loading pretrained word2vec done.')
+    # vrd object labels to vectors
+    for i in range(len(classes)):
+        obj_label = classes[i]
+        print('[%d] %s' % (i, obj_label))
+        vec = model[obj_label]
+        if vec is None or len(vec) == 0 or np.sum(vec) == 0:
+            print('[WARNING] %s' % obj_label)
+            exit(-1)
+        obj2vecs[i] = vec
+
+    with open(obj2vec_path, 'wb') as f:
+        pickle.dump(obj2vecs, f)
+
+    return obj2vecs
+
 def get_class_features(epoch, analyzer):
+    save_path = os.path.join('nbdt', 'hierarchies', args.dataset, 'class_features.bin')
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as f:
+            class_features = pickle.load(f)
+        return class_features
+
     analyzer.start_test(epoch)
 
     feature_len = 640
@@ -255,11 +289,10 @@ def get_class_features(epoch, analyzer):
     for i in range(class_counter.shape[0]):
         class_features[i] = class_features[i] / class_counter[i]
 
-    save_path = os.path.join('nbdt', 'hierarchies', args.dataset, 'class_features.bin')
     with open(save_path, 'wb') as f:
-        import pickle
         pickle.dump(class_features, f)
     print('Class features are saved at %s' % save_path)
+    return class_features
 
 
 class_analysis = getattr(analysis, args.analysis or 'Noop')
@@ -276,5 +309,6 @@ else:
     Colors.red(' * Warning: Model is loaded with pre-trained weights. ')
 
 analyzer.start_epoch(0)
-get_class_features(0, analyzer)
+class_w2v = get_word2vecs(trainset.classes)
+class_fea = get_class_features(0, analyzer)
 exit()

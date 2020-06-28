@@ -9,6 +9,7 @@ import nbdt.models as models
 import torch
 import argparse
 import os
+import numpy as np
 
 
 def get_parser():
@@ -110,7 +111,7 @@ def generate_fname(method, seed=0, branching_factor=2, extra=0,
     if method == 'random':
         if seed != 0:
             fname += f'-seed{seed}'
-    if method == 'induced' or method == 'induced2':
+    if method == 'induced' or method == 'induced2' or method == 'induced3':
         assert checkpoint or arch, \
             'Induced hierarchy needs either `arch` or `checkpoint`'
         if induced_linkage != 'ward' and induced_linkage is not None:
@@ -513,6 +514,67 @@ def build_induced_graph2(wnids, features, linkage='ward',
 
     assert len(list(get_roots(G))) == 1, list(get_roots(G))
     return G
+
+
+def build_induced_graph3(wnids, checkpoint, word_vectors, model=None, linkage='ward',
+        affinity='euclidean', branching_factor=2, dataset='CIFAR10',
+        state_dict=None):
+    num_classes = len(wnids)
+    assert checkpoint or model or state_dict, \
+        'Need to specify either `checkpoint` or `method` or `state_dict`.'
+    if state_dict:
+        centers = get_centers_from_state_dict(state_dict)
+    elif checkpoint:
+        centers = get_centers_from_checkpoint(checkpoint)
+    else:
+        centers = get_centers_from_model(model, num_classes, dataset)
+    assert num_classes == centers.size(0), (
+        f'The model FC supports {centers.size(0)} classes. However, the dataset'
+        f' {dataset} features {num_classes} classes. Try passing the '
+        '`--dataset` with the right number of classes.'
+    )
+
+    centers = torch.cat((centers, torch.from_numpy(word_vectors).float()), dim=1)
+
+    G = nx.DiGraph()
+
+    # add leaves
+    for wnid in wnids:
+        G.add_node(wnid)
+        set_node_label(G, wnid_to_synset(wnid))
+
+    # add rest of tree
+    clustering = AgglomerativeClustering(
+        linkage=linkage,
+        n_clusters=branching_factor,
+        affinity=affinity,
+    ).fit(centers)
+    children = clustering.children_
+    index_to_wnid = {}
+
+    for index, pair in enumerate(map(tuple, children)):
+        child_wnids = []
+        child_synsets = []
+        for child in pair:
+            if child < num_classes:
+                child_wnid = wnids[child]
+            else:
+                child_wnid = index_to_wnid[child - num_classes]
+            child_wnids.append(child_wnid)
+            child_synsets.append(wnid_to_synset(child_wnid))
+
+        parent = get_wordnet_meaning(G, child_synsets)
+        parent_wnid = synset_to_wnid(parent)
+        G.add_node(parent_wnid)
+        set_node_label(G, parent)
+        index_to_wnid[index] = parent_wnid
+
+        for child_wnid in child_wnids:
+            G.add_edge(parent_wnid, child_wnid)
+
+    assert len(list(get_roots(G))) == 1, list(get_roots(G))
+    return G
+
 
 
 def get_centers_from_checkpoint(checkpoint):

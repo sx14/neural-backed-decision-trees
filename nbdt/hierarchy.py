@@ -2,7 +2,7 @@ from nbdt.utils import DATASETS, METHODS, Colors, fwd
 from nbdt.graph import build_minimal_wordnet_graph, build_random_graph, \
     prune_single_successor_nodes, write_graph, get_wnids, generate_fname, \
     get_parser, get_wnids_from_dataset, get_directory, get_graph_path_from_args, \
-    augment_graph, get_depth, build_induced_graph, build_induced_graph2, read_graph, get_leaves, \
+    augment_graph, get_depth, build_induced_graph, build_induced_graph2, build_induced_graph3, read_graph, get_leaves, \
     get_roots, synset_to_wnid, wnid_to_name, get_root
 from nbdt import data
 from networkx.readwrite.json_graph import adjacency_data
@@ -65,6 +65,21 @@ def generate_hierarchy(
                                  linkage=induced_linkage,
                                  affinity=induced_affinity,
                                  branching_factor=branching_factor)
+    elif method == 'induced3':
+        import pickle
+        word2vec_path = os.path.join('nbdt', 'hierarchies', dataset, 'class_vectors.bin')
+        with open(word2vec_path, 'rb') as f:
+            word_vectors = pickle.load(f)
+        G = build_induced_graph3(wnids,
+            dataset=dataset,
+            checkpoint=checkpoint,
+            word_vectors=word_vectors,
+            model=arch,
+            linkage=induced_linkage,
+            affinity=induced_affinity,
+            branching_factor=branching_factor,
+            state_dict=model.state_dict() if model is not None else None)
+
     else:
         raise NotImplementedError(f'Method "{method}" not yet handled.')
     print_graph_stats(G, 'matched')
