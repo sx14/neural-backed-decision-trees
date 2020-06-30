@@ -215,17 +215,18 @@ def get_word2vecs(classes):
     # vrd object labels to vectors
     for i in range(len(classes)):
         obj_label = classes[i]
+        if obj_label not in model:
+            obj_label = fine_to_coarse[obj_label]
         print('[%d] %s' % (i, obj_label))
         vec = model[obj_label]
-        if vec is None or len(vec) == 0 or np.sum(vec) == 0:
-            print('[WARNING] %s' % obj_label)
-            exit(-1)
         obj2vecs[i] = vec
 
     with open(obj2vec_path, 'wb') as f:
         pickle.dump(obj2vecs, f)
 
     return obj2vecs
+
+
 
 def get_class_features(epoch, analyzer):
     save_path = os.path.join('nbdt', 'hierarchies', args.dataset, 'class_features.bin')
@@ -308,7 +309,40 @@ if not args.pretrained:
 else:
     Colors.red(' * Warning: Model is loaded with pre-trained weights. ')
 
+
+coarse_to_fine = {
+    'aquatic': 'mammals beaver, dolphin, otter, seal, whale',
+    'fish': 'aquarium fish, flatfish, ray, shark, trout',
+    'flower': 'orchids, poppies, roses, sunflowers, tulips',
+    'food': 'containers bottles, bowls, cans, cups, plates',
+    'fruit': 'apples, mushrooms, oranges, pears, sweet peppers',
+    'device': 'clock, computer keyboard, lamp, telephone, television',
+    'furniture': 'furniture bed, chair, couch, table, wardrobe',
+    'insect': 'bee, beetle, butterfly, caterpillar, cockroach',
+    'carnivore': 'bear, leopard, lion, tiger, wolf',
+    'building': 'bridge, castle, house, road, skyscraper',
+    'scene': 'cloud, forest, mountain, plain, sea',
+    'herbivore': 'camel, cattle, chimpanzee, elephant, kangaroo',
+    'mammal': 'fox, porcupine, possum, raccoon, skunk',
+    'invertebrate': 'crab, lobster, snail, spider, worm',
+    'people': 'baby, boy, girl, man, woman',
+    'reptiles': 'crocodile, dinosaur, lizard, snake, turtle',
+    'mammal ': 'hamster, mouse, rabbit, shrew, squirrel',
+    'tree': 'maple, oak, palm, pine, willow',
+    'vehicle': 'bicycle, bus, motorcycle, pickup truck, train',
+    'craft': 'lawn-mower, rocket, streetcar, tank, tractor'
+}
+
+fine_to_coarse = {}
+for coarse, fines in coarse_to_fine.items():
+    coarse = coarse.strip()
+    fines = fines.strip().split(', ')
+    for fine in fines:
+        fine_to_coarse[fine] = coarse
+
+
 analyzer.start_epoch(0)
+classes = trainset.classes
 class_w2v = get_word2vecs(trainset.classes)
-class_fea = get_class_features(0, analyzer)
+# class_fea = get_class_features(0, analyzer)
 exit()
