@@ -315,7 +315,7 @@ coarse_to_fine = {
     'fish': 'aquarium fish, flatfish, ray, shark, trout',
     'flower': 'orchids, poppies, roses, sunflowers, tulips',
     'food': 'containers bottles, bowls, cans, cups, plates',
-    'fruit': 'apples, mushrooms, oranges, pears, sweet peppers',
+    'fruit': 'apples, mushrooms, oranges, pears, sweet pepper',
     'device': 'clock, computer keyboard, lamp, telephone, television',
     'furniture': 'furniture bed, chair, couch, table, wardrobe',
     'insect': 'bee, beetle, butterfly, caterpillar, cockroach',
@@ -338,11 +338,12 @@ for coarse, fines in coarse_to_fine.items():
     coarse = coarse.strip()
     fines = fines.strip().split(', ')
     for fine in fines:
+        file = fine.replace(' ', '_')
         fine_to_coarse[fine] = coarse
 
-
+print(len(fine_to_coarse.keys()))
 analyzer.start_epoch(0)
 classes = trainset.classes
 class_w2v = get_word2vecs(trainset.classes)
-# class_fea = get_class_features(0, analyzer)
+class_fea = get_class_features(0, analyzer)
 exit()
