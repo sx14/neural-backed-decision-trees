@@ -39,7 +39,7 @@ datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
-parser.add_argument('--batch-size', default=4, type=int,
+parser.add_argument('--batch-size', default=512, type=int,
                     help='Batch size used for training')
 parser.add_argument('--epochs', '-e', default=200, type=int,
                     help='By default, lr schedule is scaled accordingly')
@@ -150,9 +150,9 @@ else:
     net = model(**model_kwargs)
 
 net = net.to(device)
-# if device == 'cuda':
-#     net = torch.nn.DataParallel(net)
-#     cudnn.benchmark = True
+if device == 'cuda':
+    net = torch.nn.DataParallel(net)
+    cudnn.benchmark = True
 
 checkpoint_fname = generate_fname(**vars(args))
 checkpoint_path = './checkpoint/{}.pth'.format(checkpoint_fname)
